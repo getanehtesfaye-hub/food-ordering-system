@@ -17,6 +17,7 @@ const buildPoolConfig = () => {
   if (process.env.DATABASE_URL) {
     return {
       connectionString: process.env.DATABASE_URL,
+      ssl: { rejectUnauthorized: false },
       ...poolOptions,
     };
   }
@@ -120,7 +121,10 @@ const testConnection = async () => {
     client.release();
   } catch (error) {
     console.error('Database connection failed:', error.message);
-    process.exit(1);
+    // Don't exit on Vercel serverless environment
+    if (process.env.NODE_ENV !== 'production') {
+      process.exit(1);
+    }
   }
 };
 
