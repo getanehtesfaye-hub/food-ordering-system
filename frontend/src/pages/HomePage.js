@@ -286,7 +286,7 @@ const HomePage = () => {
             description: item.description,
             price: formatCurrency(item.price),
             rating: item.rating || 4.5,
-            image: item.image_url ? (item.image_url.startsWith('http') ? item.image_url : `http://localhost:5000${item.image_url}`) : getFoodImage(item.name, index)
+            image: item.image_url ? (item.image_url.startsWith('http') ? item.image_url : `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}${item.image_url}`) : getFoodImage(item.name, index)
           }));
           setPopularItems(items);
         } else {

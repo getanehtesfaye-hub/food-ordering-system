@@ -2,7 +2,7 @@ import axios from 'axios';
 
 // Create axios instance
 const api = axios.create({
-  baseURL: 'http://localhost:5000/api',  // Direct backend URL
+ baseURL: process.env.REACT_APP_API_URL ? `${process.env.REACT_APP_API_URL}/api` : 'http://localhost:5000/api',  // Direct backend URL
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json',

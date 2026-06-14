@@ -475,7 +475,7 @@ const MenuPage = () => {
                 <CardBody>
                   <FoodImage>
                     <img 
-                      src={food.image_url ? (food.image_url.startsWith('http') ? food.image_url : `http://localhost:5000${food.image_url}`) : getFoodImage(food.name, index)} 
+                      src={food.image_url ? (food.image_url.startsWith('http') ? food.image_url : `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}${food.image_url}`) : getFoodImage(food.name, index)} 
                       alt={food.name}
                       onError={(e) => {
                         e.target.style.display = 'none';
