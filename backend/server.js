@@ -11,19 +11,16 @@ const app = express();
 // Middleware
 app.use(cors({
   origin: function(origin, callback) {
-    const allowedOrigins = [
-      'http://localhost:3000',
-      'http://127.0.0.1:3000',
-      'http://localhost:5000',
-      process.env.FRONTEND_URL,
-      'https://food-ordering-system-n9bg-e9kqgrz2z.vercel.app',
-      'https://food-ordering-system-n9bg-git-main-getanehtesfaye-hubs-projects.vercel.app'
-    ];
-    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
+    // Allow requests with no origin (mobile apps, curl, etc)
+    if (!origin) return callback(null, true);
+    
+    // Allow localhost for development
+    if (origin.includes('localhost')) return callback(null, true);
+    
+    // Allow ALL vercel.app domains (covers all your deployments)
+    if (origin.includes('vercel.app')) return callback(null, true);
+
+    callback(new Error('Not allowed by CORS'));
   },
   credentials: true
 }));
