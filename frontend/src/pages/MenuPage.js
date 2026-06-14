@@ -8,6 +8,7 @@ import { Card, CardBody, CardTitle } from '../components/UI/Card';
 import LoadingSpinner from '../components/UI/LoadingSpinner';
 import theme from '../styles/theme';
 import { foodAPI } from '../services/api';
+import { formatCurrency } from '../utils/currency';
 
 const MenuContainer = styled.div`
   min-height: calc(100vh - 140px);
@@ -474,7 +475,7 @@ const MenuPage = () => {
                 <CardBody>
                   <FoodImage>
                     <img 
-                      src={getFoodImage(food.name, index)} 
+                      src={food.image_url ? (food.image_url.startsWith('http') ? food.image_url : `http://localhost:5000${food.image_url}`) : getFoodImage(food.name, index)} 
                       alt={food.name}
                       onError={(e) => {
                         e.target.style.display = 'none';
@@ -513,7 +514,7 @@ const MenuPage = () => {
                     </FoodMeta>
                     
                     <FoodFooter>
-                      <FoodPrice>${parseFloat(food.price).toFixed(2)}</FoodPrice>
+                      <FoodPrice>{formatCurrency(food.price)}</FoodPrice>
                       <QuantityControls>
                         {quantity > 0 ? (
                           <>

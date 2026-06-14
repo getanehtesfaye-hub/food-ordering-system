@@ -1,10 +1,12 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import styled from 'styled-components';
 import { ChefHat, Clock, MapPin, Star, ArrowRight, Utensils, Truck, Shield } from 'lucide-react';
 import Button from '../components/UI/Button';
 import { Card, CardBody, CardTitle } from '../components/UI/Card';
 import theme from '../styles/theme';
+import { foodAPI } from '../services/api';
+import { formatCurrency } from '../utils/currency';
 
 const HomeContainer = styled.div`
   min-height: calc(100vh - 140px);
@@ -219,36 +221,119 @@ const HomePage = () => {
     }
   ];
 
-  const popularItems = [
-    {
-      name: 'Classic Burger',
-      description: 'Juicy beef patty with fresh vegetables and special sauce',
-      price: '$12.99',
-      rating: 4.5,
-      image: '/images/foods/burger.jpg'
-    },
-    {
-      name: 'Pizza Margherita',
-      description: 'Classic Italian pizza with fresh basil and mozzarella',
-      price: '$16.99',
-      rating: 4.9,
-      image: '/images/foods/pizza-margherita.jpg'
-    },
-    {
-      name: 'Sushi',
-      description: 'Fresh sushi rolls with wasabi and ginger',
-      price: '$18.99',
-      rating: 4.9,
-      image: '/images/foods/sushi.jpg'
-    },
-    {
-      name: 'French Fries',
-      description: 'Golden crispy french fries with sea salt',
-      price: '$4.99',
-      rating: 4.4,
-      image: '/images/foods/french fries.jpg'
+  const [popularItems, setPopularItems] = useState([]);
+
+  // Local fallback images resolver
+  const getFoodImage = (foodName, foodIndex) => {
+    const name = foodName.toLowerCase();
+    const exactMatches = {
+      'coca cola': '/images/foods/coca-cola.jpg',
+      'orange juice': '/images/foods/orange_juice.jpg',
+      'classic burger': '/images/foods/burger.jpg',
+      'bbq burger': '/images/foods/BBQ_burger.jpg',
+      'cheese burger': '/images/foods/cheese-burger.jpg',
+      'margherita pizza': '/images/foods/pizza-margherita.jpg',
+      'pepperoni pizza': '/images/foods/Pepperoni_pizza.jpg',
+      'spaghetti carbonara': '/images/foods/Spaghetti_Carbonar.jpg',
+      'french fries': '/images/foods/french-fries.jpg',
+      'pasta': '/images/foods/pasta.jpg',
+      'salad': '/images/foods/salad.jpg',
+      'onion rings': '/images/foods/onion-rings.jpg',
+      'mozzarella sticks': '/images/foods/mozzarella-stick.jpg',
+      'dessert': '/images/foods/dessert.jpg',
+      'brownies': '/images/foods/brownies.jpg',
+      'ice cream': '/images/foods/ice_cream.jpg',
+      'sushi': '/images/foods/sushi.jpg'
+    };
+    if (exactMatches[name]) return exactMatches[name];
+    for (const [key, value] of Object.entries(exactMatches)) {
+      if (name.includes(key)) return value;
     }
-  ];
+    const availableImages = [
+      '/images/foods/burger.jpg',
+      '/images/foods/BBQ_burger.jpg',
+      '/images/foods/cheese-burger.jpg',
+      '/images/foods/chicken.jpg',
+      '/images/foods/pizza-margherita.jpg',
+      '/images/foods/Pepperoni_pizza.jpg',
+      '/images/foods/pizza.jpg',
+      '/images/foods/Spaghetti_Carbonar.jpg',
+      '/images/foods/pasta.jpg',
+      '/images/foods/lasagna.jpg',
+      '/images/foods/salad.jpg',
+      '/images/foods/french-fries.jpg',
+      '/images/foods/onion-rings.jpg',
+      '/images/foods/mozzarella-stick.jpg',
+      '/images/foods/coca-cola.jpg',
+      '/images/foods/orange_juice.jpg',
+      '/images/foods/drinks.jpg',
+      '/images/foods/dessert.jpg',
+      '/images/foods/brownies.jpg',
+      '/images/foods/ice_cream.jpg',
+      '/images/foods/sushi.jpg'
+    ];
+    return availableImages[foodIndex % availableImages.length] || '/images/foods/burger.jpg';
+  };
+
+  useEffect(() => {
+    const fetchPopular = async () => {
+      try {
+        const response = await foodAPI.getPopular(4);
+        if (response.success && response.data?.popular_items?.length > 0) {
+          const items = response.data.popular_items.map((item, index) => ({
+            id: item.id,
+            name: item.name,
+            description: item.description,
+            price: formatCurrency(item.price),
+            rating: item.rating || 4.5,
+            image: item.image_url ? (item.image_url.startsWith('http') ? item.image_url : `http://localhost:5000${item.image_url}`) : getFoodImage(item.name, index)
+          }));
+          setPopularItems(items);
+        } else {
+          useDefaultPopular();
+        }
+      } catch (error) {
+        console.error('Error fetching popular items:', error);
+        useDefaultPopular();
+      }
+    };
+
+    const useDefaultPopular = () => {
+      const defaultPopular = [
+        {
+          name: 'Classic Burger',
+          description: 'Juicy beef patty with fresh vegetables and special sauce',
+          price: '$12.99',
+          rating: 4.5,
+          image: '/images/foods/burger.jpg'
+        },
+        {
+          name: 'Pizza Margherita',
+          description: 'Classic Italian pizza with fresh basil and mozzarella',
+          price: '$16.99',
+          rating: 4.9,
+          image: '/images/foods/pizza-margherita.jpg'
+        },
+        {
+          name: 'Sushi',
+          description: 'Fresh sushi rolls with wasabi and ginger',
+          price: '$18.99',
+          rating: 4.9,
+          image: '/images/foods/sushi.jpg'
+        },
+        {
+          name: 'French Fries',
+          description: 'Golden crispy french fries with sea salt',
+          price: '$4.99',
+          rating: 4.4,
+          image: '/images/foods/french-fries.jpg'
+        }
+      ];
+      setPopularItems(defaultPopular);
+    };
+
+    fetchPopular();
+  }, []);
 
   return (
     <HomeContainer>

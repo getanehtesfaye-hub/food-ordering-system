@@ -134,9 +134,9 @@ export const handleApiError = (error) => {
       data: error.response.data,
     };
   } else if (error.request) {
-    // Request was made but no response received
+    // Request was made but no response received (backend likely not running)
     return {
-      message: 'Network error. Please check your connection.',
+      message: 'Cannot connect to server. Make sure the backend is running on port 5000.',
       status: null,
       data: null,
     };

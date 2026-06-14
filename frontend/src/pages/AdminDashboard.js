@@ -1,22 +1,23 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import styled from 'styled-components';
-import { 
-  BarChart3, 
-  Users, 
-  ShoppingCart, 
-  DollarSign, 
-  TrendingUp, 
-  Clock, 
-  CheckCircle, 
+import {
+  Users,
+  ShoppingCart,
+  Banknote,
+  Clock,
+  CheckCircle,
   XCircle,
-  Utensils,
   Package,
+  Truck,
+  Utensils,
   AlertCircle,
-  ArrowUp,
-  ArrowDown
 } from 'lucide-react';
+import { orderAPI, userAPI } from '../services/api';
+import { formatCurrency } from '../utils/currency';
+import { formatOrderStatus } from '../utils/orderStatus';
 import Button from '../components/UI/Button';
+import LoadingSpinner from '../components/UI/LoadingSpinner';
 import { Card, CardBody, CardTitle } from '../components/UI/Card';
 import theme from '../styles/theme';
 
@@ -53,7 +54,7 @@ const StatsGrid = styled.div`
 const StatCard = styled(Card)`
   position: relative;
   overflow: hidden;
-  
+
   &::before {
     content: '';
     position: absolute;
@@ -61,7 +62,7 @@ const StatCard = styled(Card)`
     left: 0;
     right: 0;
     height: 4px;
-    background: linear-gradient(90deg, ${props => props.color} 0%, ${props => props.color} 100%);
+    background: ${(props) => props.color};
   }
 `;
 
@@ -72,8 +73,8 @@ const StatIcon = styled.div`
   width: 60px;
   height: 60px;
   border-radius: ${theme.borderRadius.lg};
-  background-color: ${props => props.color}20;
-  color: ${props => props.color};
+  background-color: ${(props) => props.color}20;
+  color: ${(props) => props.color};
   margin-bottom: ${theme.spacing.md};
 `;
 
@@ -87,41 +88,40 @@ const StatValue = styled.div`
 const StatLabel = styled.div`
   color: ${theme.colors.gray[600]};
   font-size: ${theme.typography.fontSize.md};
-  margin-bottom: ${theme.spacing.md};
 `;
 
-const StatChange = styled.div`
+const StatHint = styled.div`
   display: flex;
   align-items: center;
   gap: ${theme.spacing.xs};
+  margin-top: ${theme.spacing.md};
   font-size: ${theme.typography.fontSize.sm};
-  font-weight: ${theme.typography.fontWeight.medium};
-  
-  ${props => props.positive ? `
-    color: ${theme.colors.success};
-  ` : `
-    color: ${theme.colors.error};
-  `}
+  color: ${(props) => (props.warning ? theme.colors.warning : theme.colors.gray[500])};
 `;
 
-const ChartsGrid = styled.div`
+const QuickActions = styled.div`
   display: grid;
-  grid-template-columns: 2fr 1fr;
-  gap: ${theme.spacing.xl};
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: ${theme.spacing.md};
   margin-bottom: ${theme.spacing.xl};
-  
-  @media (max-width: ${theme.breakpoints.desktop}) {
-    grid-template-columns: 1fr;
+`;
+
+const ActionButton = styled(Button)`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: ${theme.spacing.sm};
+  padding: ${theme.spacing.lg};
+  text-decoration: none;
+  color: ${theme.colors.white};
+  background: linear-gradient(135deg, ${(props) => props.color} 0%, ${(props) => props.color}dd 100%);
+
+  &:hover {
+    background: linear-gradient(135deg, ${(props) => props.color}dd 0%, ${(props) => props.color} 100%);
   }
 `;
 
-const ChartCard = styled(Card)`
-  height: 400px;
-`;
-
-const RecentOrdersCard = styled(Card)`
-  margin-bottom: ${theme.spacing.lg};
-`;
+const RecentOrdersCard = styled(Card)``;
 
 const OrderList = styled.div`
   display: flex;
@@ -136,8 +136,7 @@ const OrderItem = styled.div`
   padding: ${theme.spacing.md};
   background-color: ${theme.colors.gray[50]};
   border-radius: ${theme.borderRadius.md};
-  transition: background-color ${theme.transitions.fast};
-  
+
   &:hover {
     background-color: ${theme.colors.gray[100]};
   }
@@ -161,6 +160,8 @@ const OrderMeta = styled.div`
   display: flex;
   align-items: center;
   gap: ${theme.spacing.md};
+  flex-wrap: wrap;
+  justify-content: flex-end;
 `;
 
 const OrderStatus = styled.div`
@@ -171,49 +172,22 @@ const OrderStatus = styled.div`
   border-radius: ${theme.borderRadius.sm};
   font-size: ${theme.typography.fontSize.sm};
   font-weight: ${theme.typography.fontWeight.medium};
-  
-  ${props => {
+  white-space: nowrap;
+
+  ${(props) => {
     switch (props.status) {
       case 'pending':
-        return `
-          background-color: ${theme.colors.warning}20;
-          color: ${theme.colors.warning};
-        `;
-      case 'confirmed':
-        return `
-          background-color: ${theme.colors.info}20;
-          color: ${theme.colors.info};
-        `;
+        return `background-color: ${theme.colors.warning}20; color: ${theme.colors.warning};`;
       case 'preparing':
-        return `
-          background-color: ${theme.colors.primary}20;
-          color: ${theme.colors.primary};
-        `;
+        return `background-color: ${theme.colors.primary}20; color: ${theme.colors.primary};`;
       case 'ready':
-        return `
-          background-color: ${theme.colors.success}20;
-          color: ${theme.colors.success};
-        `;
-      case 'delivering':
-        return `
-          background-color: ${theme.colors.primaryLight}20;
-          color: ${theme.colors.primaryLight};
-        `;
+        return `background-color: ${theme.colors.success}20; color: ${theme.colors.success};`;
       case 'delivered':
-        return `
-          background-color: ${theme.colors.success}20;
-          color: ${theme.colors.success};
-        `;
+        return `background-color: ${theme.colors.success}20; color: ${theme.colors.success};`;
       case 'cancelled':
-        return `
-          background-color: ${theme.colors.error}20;
-          color: ${theme.colors.error};
-        `;
+        return `background-color: ${theme.colors.error}20; color: ${theme.colors.error};`;
       default:
-        return `
-          background-color: ${theme.colors.gray[500]}20;
-          color: ${theme.colors.gray[500]};
-        `;
+        return `background-color: ${theme.colors.gray[500]}20; color: ${theme.colors.gray[500]};`;
     }
   }}
 `;
@@ -223,132 +197,80 @@ const OrderAmount = styled.div`
   color: ${theme.colors.primary};
 `;
 
-const QuickActions = styled.div`
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: ${theme.spacing.md};
-  margin-bottom: ${theme.spacing.lg};
-`;
-
-const ActionButton = styled(Button)`
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: ${theme.spacing.sm};
-  padding: ${theme.spacing.lg};
-  text-decoration: none;
-  color: ${theme.colors.white};
-  background: linear-gradient(135deg, ${props => props.color} 0%, ${props => props.color}dd 100%);
-  
-  &:hover {
-    background: linear-gradient(135deg, ${props => props.color}dd 0%, ${props => props.color} 100%);
-  }
-`;
-
-const ChartPlaceholder = styled.div`
-  height: 300px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: ${theme.colors.gray[500]};
-  font-size: ${theme.typography.fontSize.lg};
-  border: 2px dashed ${theme.colors.gray[300]};
-  border-radius: ${theme.borderRadius.lg};
-  margin: ${theme.spacing.lg};
+const EmptyOrders = styled.p`
+  text-align: center;
+  color: ${theme.colors.gray[600]};
+  padding: ${theme.spacing.xl};
 `;
 
 const AdminDashboard = () => {
   const [stats, setStats] = useState({
     totalOrders: 0,
     totalRevenue: 0,
-    totalCustomers: 0,
+    totalUsers: 0,
     pendingOrders: 0,
-    todayOrders: 0,
-    todayRevenue: 0
   });
-
   const [recentOrders, setRecentOrders] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    // Mock data - in real app, this would come from API
-    const mockStats = {
-      totalOrders: 1247,
-      totalRevenue: 45678.90,
-      totalCustomers: 892,
-      pendingOrders: 23,
-      todayOrders: 45,
-      todayRevenue: 1234.56
-    };
-
-    const mockRecentOrders = [
-      {
-        id: 'ORD-001',
-        customer: 'John Doe',
-        status: 'preparing',
-        amount: 45.99,
-        time: '2 mins ago'
-      },
-      {
-        id: 'ORD-002',
-        customer: 'Jane Smith',
-        status: 'pending',
-        amount: 32.50,
-        time: '5 mins ago'
-      },
-      {
-        id: 'ORD-003',
-        customer: 'Bob Johnson',
-        status: 'delivering',
-        amount: 67.25,
-        time: '12 mins ago'
-      },
-      {
-        id: 'ORD-004',
-        customer: 'Alice Brown',
-        status: 'delivered',
-        amount: 28.75,
-        time: '25 mins ago'
-      },
-      {
-        id: 'ORD-005',
-        customer: 'Charlie Wilson',
-        status: 'confirmed',
-        amount: 51.00,
-        time: '30 mins ago'
-      }
-    ];
-
-    setTimeout(() => {
-      setStats(mockStats);
-      setRecentOrders(mockRecentOrders);
-      setLoading(false);
-    }, 1000);
-  }, []);
-
   const statusIcons = {
     pending: Clock,
-    confirmed: CheckCircle,
-    preparing: Clock,
+    preparing: Package,
     ready: CheckCircle,
-    delivering: Package,
-    delivered: CheckCircle,
-    cancelled: XCircle
+    delivered: Truck,
+    cancelled: XCircle,
   };
 
-  const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD'
-    }).format(amount);
+  const loadDashboard = useCallback(async () => {
+    try {
+      setLoading(true);
+
+      const [statsResponse, ordersResponse, usersResponse] = await Promise.all([
+        orderAPI.getStats(),
+        orderAPI.getAllOrders({ limit: 5, sortBy: 'created_at', sortOrder: 'DESC' }),
+        userAPI.getAll(),
+      ]);
+
+      if (statsResponse.success) {
+        const data = statsResponse.data.stats;
+        setStats({
+          totalOrders: Number(data.total_orders) || 0,
+          totalRevenue: Number(data.total_revenue) || 0,
+          pendingOrders: Number(data.pending_orders) || 0,
+          totalUsers: usersResponse.success
+            ? (usersResponse.data.users || []).length
+            : 0,
+        });
+      }
+
+      if (ordersResponse.success) {
+        setRecentOrders(ordersResponse.data.orders || []);
+      }
+    } catch (error) {
+      console.error('Failed to load dashboard:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadDashboard();
+  }, [loadDashboard]);
+
+  const formatDate = (dateString) => {
+    if (!dateString) return '';
+    return new Intl.DateTimeFormat('en-ET', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(new Date(dateString));
   };
 
   if (loading) {
     return (
       <DashboardContainer>
-        <div style={{ textAlign: 'center', padding: theme.spacing.xxl }}>
-          Loading dashboard...
-        </div>
+        <LoadingSpinner />
       </DashboardContainer>
     );
   }
@@ -358,7 +280,7 @@ const AdminDashboard = () => {
       <DashboardHeader>
         <DashboardTitle>Admin Dashboard</DashboardTitle>
         <DashboardSubtitle>
-          Manage your restaurant operations and track performance
+          Live overview of orders, revenue, and customers
         </DashboardSubtitle>
       </DashboardHeader>
 
@@ -370,24 +292,18 @@ const AdminDashboard = () => {
             </StatIcon>
             <StatValue>{stats.totalOrders}</StatValue>
             <StatLabel>Total Orders</StatLabel>
-            <StatChange positive>
-              <ArrowUp size={16} />
-              +12% from last month
-            </StatChange>
+            <StatHint>All orders in the system</StatHint>
           </CardBody>
         </StatCard>
 
         <StatCard color={theme.colors.success}>
           <CardBody>
             <StatIcon color={theme.colors.success}>
-              <DollarSign size={32} />
+              <Banknote size={32} />
             </StatIcon>
             <StatValue>{formatCurrency(stats.totalRevenue)}</StatValue>
             <StatLabel>Total Revenue</StatLabel>
-            <StatChange positive>
-              <ArrowUp size={16} />
-              +8% from last month
-            </StatChange>
+            <StatHint>From completed and active orders</StatHint>
           </CardBody>
         </StatCard>
 
@@ -396,12 +312,9 @@ const AdminDashboard = () => {
             <StatIcon color={theme.colors.info}>
               <Users size={32} />
             </StatIcon>
-            <StatValue>{stats.totalCustomers}</StatValue>
-            <StatLabel>Total Customers</StatLabel>
-            <StatChange positive>
-              <ArrowUp size={16} />
-              +15% from last month
-            </StatChange>
+            <StatValue>{stats.totalUsers}</StatValue>
+            <StatLabel>Total Users</StatLabel>
+            <StatHint>Registered customer accounts</StatHint>
           </CardBody>
         </StatCard>
 
@@ -412,10 +325,10 @@ const AdminDashboard = () => {
             </StatIcon>
             <StatValue>{stats.pendingOrders}</StatValue>
             <StatLabel>Pending Orders</StatLabel>
-            <StatChange>
-              <AlertCircle size={16} />
-              Needs attention
-            </StatChange>
+            <StatHint warning={stats.pendingOrders > 0}>
+              <AlertCircle size={14} />
+              {stats.pendingOrders > 0 ? 'Awaiting approval' : 'No pending orders'}
+            </StatHint>
           </CardBody>
         </StatCard>
       </StatsGrid>
@@ -435,51 +348,35 @@ const AdminDashboard = () => {
         </ActionButton>
       </QuickActions>
 
-      <ChartsGrid>
-        <ChartCard>
-          <CardBody>
-            <CardTitle>Revenue Overview</CardTitle>
-            <ChartPlaceholder>
-              <BarChart3 size={48} />
-              <span style={{ marginLeft: theme.spacing.md }}>Revenue Chart</span>
-            </ChartPlaceholder>
-          </CardBody>
-        </ChartCard>
-
-        <ChartCard>
-          <CardBody>
-            <CardTitle>Order Status Distribution</CardTitle>
-            <ChartPlaceholder>
-              <TrendingUp size={48} />
-              <span style={{ marginLeft: theme.spacing.md }}>Status Chart</span>
-            </ChartPlaceholder>
-          </CardBody>
-        </ChartCard>
-      </ChartsGrid>
-
       <RecentOrdersCard>
         <CardBody>
           <CardTitle>Recent Orders</CardTitle>
-          <OrderList>
-            {recentOrders.map(order => {
-              const StatusIcon = statusIcons[order.status] || Clock;
-              return (
-                <OrderItem key={order.id}>
-                  <OrderInfo>
-                    <OrderNumber>{order.id}</OrderNumber>
-                    <OrderCustomer>{order.customer}</OrderCustomer>
-                  </OrderInfo>
-                  <OrderMeta>
-                    <OrderStatus status={order.status}>
-                      <StatusIcon size={14} />
-                      {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
-                    </OrderStatus>
-                    <OrderAmount>{formatCurrency(order.amount)}</OrderAmount>
-                  </OrderMeta>
-                </OrderItem>
-              );
-            })}
-          </OrderList>
+          {recentOrders.length === 0 ? (
+            <EmptyOrders>No orders yet. Orders will appear here once customers place them.</EmptyOrders>
+          ) : (
+            <OrderList>
+              {recentOrders.map((order) => {
+                const StatusIcon = statusIcons[order.status] || Clock;
+                return (
+                  <OrderItem key={order.id}>
+                    <OrderInfo>
+                      <OrderNumber>Order #{order.id}</OrderNumber>
+                      <OrderCustomer>
+                        {order.username || 'Guest'} · {formatDate(order.created_at)}
+                      </OrderCustomer>
+                    </OrderInfo>
+                    <OrderMeta>
+                      <OrderStatus status={order.status}>
+                        <StatusIcon size={14} />
+                        {formatOrderStatus(order.status)}
+                      </OrderStatus>
+                      <OrderAmount>{formatCurrency(order.total_amount)}</OrderAmount>
+                    </OrderMeta>
+                  </OrderItem>
+                );
+              })}
+            </OrderList>
+          )}
           <div style={{ textAlign: 'center', marginTop: theme.spacing.lg }}>
             <Button as={Link} to="/admin/orders" variant="outline">
               View All Orders

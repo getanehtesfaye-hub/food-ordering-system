@@ -1,13 +1,15 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
-import { ArrowLeft, CreditCard, MapPin, Clock, User, Shield, Check } from 'lucide-react';
+import { ArrowLeft, CreditCard, MapPin, Clock, Shield, Check } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { orderAPI } from '../services/api';
 import Button from '../components/UI/Button';
-import Input from '../components/UI/Input';
+import FormField from '../components/UI/FormField';
 import { Card, CardBody, CardTitle } from '../components/UI/Card';
+import { formatCurrency, calculateTax, calculateDeliveryFee } from '../utils/currency';
 import theme from '../styles/theme';
 
 const CheckoutContainer = styled.div`
@@ -274,20 +276,18 @@ const CheckoutPage = () => {
   const [deliveryOption, setDeliveryOption] = useState('delivery');
   const [paymentMethod, setPaymentMethod] = useState('card');
   const [orderData, setOrderData] = useState({
-    firstName: user?.firstName || '',
-    lastName: user?.lastName || '',
+    firstName: user?.username?.split(' ')[0] || '',
+    lastName: user?.username?.split(' ').slice(1).join(' ') || '',
     email: user?.email || '',
     phone: user?.phone || '',
     address: user?.address || '',
-    city: user?.city || '',
-    state: user?.state || '',
-    zipCode: user?.zipCode || '',
     cardNumber: '',
     cardName: '',
     expiryDate: '',
     cvv: '',
     specialInstructions: ''
   });
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -299,48 +299,66 @@ const CheckoutPage = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
+    if (!orderData.phone?.trim()) {
+      toast.error('Please enter your phone number');
+      return;
+    }
+
+    if (deliveryOption === 'delivery' && !orderData.address?.trim()) {
+      toast.error('Please enter your delivery address');
+      return;
+    }
+
+    setIsSubmitting(true);
+
     try {
       const subtotal = getTotalPrice();
-      const tax = subtotal * 0.08;
-      const deliveryFee = deliveryOption === 'delivery' && subtotal < 50 ? 4.99 : 0;
-      const total = subtotal + tax + deliveryFee;
-      
+      const tax = calculateTax(subtotal);
+      const deliveryFee = calculateDeliveryFee(subtotal, deliveryOption === 'delivery');
+
+      const fullAddress =
+        deliveryOption === 'delivery'
+          ? orderData.address.trim()
+          : 'Pickup at restaurant';
+
       const orderPayload = {
-        delivery_address: deliveryOption === 'delivery' ? orderData.address : 'Pickup',
+        delivery_address: fullAddress,
         delivery_type: deliveryOption,
         payment_method: paymentMethod,
-        subtotal: subtotal,
-        tax: tax,
+        subtotal,
+        tax,
         delivery_fee: deliveryFee,
-        total: total,
+        total: subtotal + tax + deliveryFee,
         phone: orderData.phone,
         notes: orderData.specialInstructions,
-        items: items.map(item => ({
+        items: items.map((item) => ({
           food_item_id: item.food_id,
           quantity: item.quantity,
-          price: parseFloat(item.price)
-        }))
+          price: parseFloat(item.price),
+        })),
       };
-      
+
       const response = await orderAPI.create(orderPayload);
-      
+
       if (response.success) {
-        // Clear cart after successful order
         await clearCart();
+        toast.success('Order placed successfully!');
         navigate('/orders');
       } else {
-        alert('Failed to place order: ' + response.message);
+        toast.error(response.message || 'Failed to place order');
       }
     } catch (error) {
       console.error('Error placing order:', error);
-      alert('Failed to place order. Please try again.');
+      toast.error(error.response?.data?.message || 'Failed to place order. Please try again.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const subtotal = getTotalPrice();
-  const tax = subtotal * 0.08; // 8% tax
-  const deliveryFee = deliveryOption === 'delivery' && subtotal < 50 ? 4.99 : 0;
+  const tax = calculateTax(subtotal);
+  const deliveryFee = calculateDeliveryFee(subtotal, deliveryOption === 'delivery');
   const total = subtotal + tax + deliveryFee;
 
   if (!items || !Array.isArray(items) || items.length === 0) {
@@ -423,72 +441,51 @@ const CheckoutPage = () => {
               
               <FormGrid>
                 <FormRow>
-                  <Input
+                  <FormField
                     name="firstName"
                     label="First Name"
+                    placeholder="e.g. John"
                     value={orderData.firstName}
                     onChange={handleInputChange}
-                    required
                   />
-                  <Input
+                  <FormField
                     name="lastName"
                     label="Last Name"
+                    placeholder="e.g. Smith"
                     value={orderData.lastName}
                     onChange={handleInputChange}
-                    required
                   />
                 </FormRow>
-                
-                <Input
+
+                <FormField
                   name="email"
                   label="Email"
                   type="email"
+                  placeholder="e.g. john.smith@email.com"
                   value={orderData.email}
                   onChange={handleInputChange}
-                  required
                 />
-                
-                <Input
+
+                <FormField
                   name="phone"
                   label="Phone Number"
                   type="tel"
+                  placeholder="e.g. +251 911 234 567"
                   value={orderData.phone}
                   onChange={handleInputChange}
                   required
                 />
-                
-                <Input
-                  name="address"
-                  label="Street Address"
-                  value={orderData.address}
-                  onChange={handleInputChange}
-                  required
-                />
-                
-                <FormRow>
-                  <Input
-                    name="city"
-                    label="City"
-                    value={orderData.city}
+
+                {deliveryOption === 'delivery' && (
+                  <FormField
+                    name="address"
+                    label="Delivery Address"
+                    placeholder="e.g. Bole Road, near Edna Mall, Addis Ababa"
+                    value={orderData.address}
                     onChange={handleInputChange}
                     required
                   />
-                  <Input
-                    name="state"
-                    label="State"
-                    value={orderData.state}
-                    onChange={handleInputChange}
-                    required
-                  />
-                </FormRow>
-                
-                <Input
-                  name="zipCode"
-                  label="ZIP Code"
-                  value={orderData.zipCode}
-                  onChange={handleInputChange}
-                  required
-                />
+                )}
               </FormGrid>
             </CardBody>
           </FormSection>
@@ -516,7 +513,7 @@ const CheckoutPage = () => {
                   <OptionDescription>Get your food delivered to your doorstep</OptionDescription>
                 </OptionContent>
                 <OptionPrice>
-                  {deliveryFee === 0 ? 'FREE' : `$${deliveryFee.toFixed(2)}`}
+                  {deliveryFee === 0 ? 'FREE' : formatCurrency(deliveryFee)}
                 </OptionPrice>
               </DeliveryOption>
               
@@ -579,52 +576,49 @@ const CheckoutPage = () => {
                 
                 {paymentMethod === 'card' && (
                   <>
-                    <Input
+                    <FormField
                       name="cardNumber"
                       label="Card Number"
-                      placeholder="1234 5678 9012 3456"
+                      placeholder="e.g. 1234 5678 9012 3456"
                       value={orderData.cardNumber}
                       onChange={handleInputChange}
-                      required
                     />
-                    
-                    <Input
+
+                    <FormField
                       name="cardName"
                       label="Cardholder Name"
+                      placeholder="e.g. John Smith"
                       value={orderData.cardName}
                       onChange={handleInputChange}
-                      required
                     />
-                    
+
                     <FormRow>
-                      <Input
+                      <FormField
                         name="expiryDate"
                         label="Expiry Date"
                         placeholder="MM/YY"
                         value={orderData.expiryDate}
                         onChange={handleInputChange}
-                        required
                       />
-                      <Input
+                      <FormField
                         name="cvv"
                         label="CVV"
-                        placeholder="123"
+                        placeholder="e.g. 123"
                         value={orderData.cvv}
                         onChange={handleInputChange}
-                        required
                       />
                     </FormRow>
                   </>
                 )}
-                
-                <Input
+
+                <FormField
                   name="specialInstructions"
                   label="Special Instructions (Optional)"
                   as="textarea"
                   rows={3}
                   value={orderData.specialInstructions}
                   onChange={handleInputChange}
-                  placeholder="Any special requests or dietary requirements..."
+                  placeholder="e.g. No onions, extra sauce, ring the doorbell..."
                 />
               </FormGrid>
             </CardBody>
@@ -641,37 +635,43 @@ const CheckoutPage = () => {
                   <CartItem key={item.food_id}>
                     <ItemInfo>
                       <ItemName>{item.name}</ItemName>
-                      <ItemQuantity>${parseFloat(item.price).toFixed(2)} x {item.quantity}</ItemQuantity>
+                      <ItemQuantity>{formatCurrency(item.price)} x {item.quantity}</ItemQuantity>
                     </ItemInfo>
-                    <ItemPrice>${(parseFloat(item.price) * item.quantity).toFixed(2)}</ItemPrice>
+                    <ItemPrice>{formatCurrency(parseFloat(item.price) * item.quantity)}</ItemPrice>
                   </CartItem>
                 ))}
               </CartItems>
               
               <SummaryItem>
                 <span>Subtotal</span>
-                <span>${subtotal.toFixed(2)}</span>
+                <span>{formatCurrency(subtotal)}</span>
               </SummaryItem>
               
               <SummaryItem>
-                <span>Tax (8%)</span>
-                <span>${tax.toFixed(2)}</span>
+                <span>Tax (15%)</span>
+                <span>{formatCurrency(tax)}</span>
               </SummaryItem>
               
               <SummaryItem>
                 <span>Delivery</span>
                 <span>
-                  {deliveryFee === 0 ? 'FREE' : `$${deliveryFee.toFixed(2)}`}
+                  {deliveryFee === 0 ? 'FREE' : formatCurrency(deliveryFee)}
                 </span>
               </SummaryItem>
               
               <SummaryTotal>
                 <span>Total</span>
-                <span>${total.toFixed(2)}</span>
+                <span>{formatCurrency(total)}</span>
               </SummaryTotal>
               
-              <PlaceOrderButton type="submit" size="lg" onClick={handleSubmit}>
-                Place Order
+              <PlaceOrderButton
+                type="submit"
+                size="lg"
+                onClick={handleSubmit}
+                loading={isSubmitting}
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? 'Placing Order...' : 'Place Order'}
               </PlaceOrderButton>
               
               <SecurityInfo>

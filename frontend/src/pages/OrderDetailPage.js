@@ -1,9 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import styled from 'styled-components';
-import { ArrowLeft, Clock, CheckCircle, XCircle, Truck, MapPin, Phone, User, Calendar, DollarSign, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Clock, CheckCircle, XCircle, Truck, MapPin, Phone, User, Calendar, Banknote, RefreshCw } from 'lucide-react';
 import Button from '../components/UI/Button';
 import { Card, CardBody, CardTitle } from '../components/UI/Card';
+import { orderAPI } from '../services/api';
+import { formatCurrency } from '../utils/currency';
+import { formatOrderStatus } from '../utils/orderStatus';
 import theme from '../styles/theme';
 
 const OrderDetailContainer = styled.div`
@@ -285,69 +288,42 @@ const OrderDetailPage = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Mock data - in real app, this would come from API
-    const mockOrder = {
-      id: id,
-      orderNumber: `ORD-${id}`,
-      date: new Date('2024-01-15T14:30:00'),
-      status: 'delivering',
-      estimatedDelivery: new Date('2024-01-15T15:15:00'),
-      items: [
-        { name: 'Classic Burger', quantity: 2, price: 12.99 },
-        { name: 'French Fries', quantity: 1, price: 4.99 },
-        { name: 'Coca Cola', quantity: 2, price: 2.99 }
-      ],
-      subtotal: 35.95,
-      tax: 2.88,
-      deliveryFee: 4.99,
-      total: 43.82,
-      deliveryAddress: {
-        street: '123 Main Street',
-        city: 'New York',
-        state: 'NY',
-        zipCode: '10001'
-      },
-      customerInfo: {
-        name: 'John Doe',
-        phone: '+1 (555) 123-4567',
-        email: 'john.doe@example.com'
-      },
-      specialInstructions: 'Please deliver to the front desk',
-      paymentMethod: 'Credit Card',
-      timeline: [
-        { status: 'Order Placed', time: '2:30 PM', completed: true },
-        { status: 'Order Confirmed', time: '2:35 PM', completed: true },
-        { status: 'Preparing', time: '2:40 PM', completed: true },
-        { status: 'Ready for Delivery', time: '2:55 PM', completed: true },
-        { status: 'Out for Delivery', time: '3:00 PM', completed: true },
-        { status: 'Delivered', time: 'Estimated 3:15 PM', completed: false }
-      ]
+    const loadOrder = async () => {
+      try {
+        setLoading(true);
+        const response = await orderAPI.getById(id);
+        if (response.success) {
+          setOrder(response.data.order);
+        } else {
+          setOrder(null);
+        }
+      } catch (error) {
+        setOrder(null);
+      } finally {
+        setLoading(false);
+      }
     };
 
-    setTimeout(() => {
-      setOrder(mockOrder);
-      setLoading(false);
-    }, 1000);
+    loadOrder();
   }, [id]);
 
   const statusIcons = {
     pending: Clock,
-    confirmed: CheckCircle,
     preparing: Clock,
     ready: CheckCircle,
-    delivering: Truck,
-    delivered: CheckCircle,
+    delivered: Truck,
     cancelled: XCircle
   };
 
   const formatDate = (date) => {
-    return new Intl.DateTimeFormat('en-US', {
+    if (!date) return '';
+    return new Intl.DateTimeFormat('en-ET', {
       month: 'long',
       day: 'numeric',
       year: 'numeric',
       hour: '2-digit',
       minute: '2-digit'
-    }).format(date);
+    }).format(new Date(date));
   };
 
   const StatusIcon = statusIcons[order?.status] || Clock;
@@ -389,9 +365,9 @@ const OrderDetailPage = () => {
           <ArrowLeft size={20} />
           Back to Orders
         </BackButton>
-        <OrderTitle>Order #{order.orderNumber}</OrderTitle>
+        <OrderTitle>Order #{order.id}</OrderTitle>
         <p style={{ color: theme.colors.gray[600] }}>
-          Placed on {formatDate(order.date)}
+          Placed on {formatDate(order.created_at)}
         </p>
       </OrderHeader>
 
@@ -403,26 +379,9 @@ const OrderDetailPage = () => {
                 <CardTitle>Order Status</CardTitle>
                 <StatusBadge status={order.status}>
                   <StatusIcon size={20} />
-                  {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
+                  {formatOrderStatus(order.status)}
                 </StatusBadge>
               </StatusHeader>
-
-              <StatusTimeline>
-                <TimelineLine />
-                {order.timeline.map((item, index) => (
-                  <TimelineItem key={index}>
-                    <TimelineDot completed={item.completed}>
-                      {item.completed && <CheckCircle size={12} />}
-                    </TimelineDot>
-                    <TimelineContent>
-                      <TimelineTitle completed={item.completed}>
-                        {item.status}
-                      </TimelineTitle>
-                      <TimelineTime>{item.time}</TimelineTime>
-                    </TimelineContent>
-                  </TimelineItem>
-                ))}
-              </StatusTimeline>
             </CardBody>
           </OrderStatusCard>
 
@@ -430,13 +389,13 @@ const OrderDetailPage = () => {
             <CardBody>
               <CardTitle>Order Items</CardTitle>
               <OrderItemsGrid>
-                {order.items.map((item, index) => (
+                {(order.items || []).map((item, index) => (
                   <OrderItem key={index}>
                     <ItemInfo>
-                      <ItemName>{item.name}</ItemName>
+                      <ItemName>{item.food_name || item.name}</ItemName>
                       <ItemQuantity>Quantity: {item.quantity}</ItemQuantity>
                     </ItemInfo>
-                    <ItemPrice>${(item.price * item.quantity).toFixed(2)}</ItemPrice>
+                    <ItemPrice>{formatCurrency(item.price * item.quantity)}</ItemPrice>
                   </OrderItem>
                 ))}
               </OrderItemsGrid>
@@ -446,21 +405,9 @@ const OrderDetailPage = () => {
           <OrderSummaryCard>
             <CardBody>
               <CardTitle>Order Summary</CardTitle>
-              <SummaryItem>
-                <span>Subtotal</span>
-                <span>${order.subtotal.toFixed(2)}</span>
-              </SummaryItem>
-              <SummaryItem>
-                <span>Tax</span>
-                <span>${order.tax.toFixed(2)}</span>
-              </SummaryItem>
-              <SummaryItem>
-                <span>Delivery Fee</span>
-                <span>${order.deliveryFee.toFixed(2)}</span>
-              </SummaryItem>
               <SummaryTotal>
                 <span>Total</span>
-                <span>${order.total.toFixed(2)}</span>
+                <span>{formatCurrency(order.total_amount)}</span>
               </SummaryTotal>
               
               <OrderActions>
@@ -489,10 +436,7 @@ const OrderDetailPage = () => {
                 </InfoIcon>
                 <InfoContent>
                   <InfoLabel>Delivery Address</InfoLabel>
-                  <InfoValue>
-                    {order.deliveryAddress.street}<br />
-                    {order.deliveryAddress.city}, {order.deliveryAddress.state} {order.deliveryAddress.zipCode}
-                  </InfoValue>
+                  <InfoValue>{order.delivery_address}</InfoValue>
                 </InfoContent>
               </InfoItem>
               
@@ -503,31 +447,21 @@ const OrderDetailPage = () => {
                 <InfoContent>
                   <InfoLabel>Customer</InfoLabel>
                   <InfoValue>
-                    {order.customerInfo.name}<br />
-                    {order.customerInfo.phone}<br />
-                    {order.customerInfo.email}
+                    {order.username || 'Guest'}<br />
+                    {order.phone}<br />
+                    {order.email}
                   </InfoValue>
                 </InfoContent>
               </InfoItem>
               
-              <InfoItem>
-                <InfoIcon>
-                  <DollarSign size={20} />
-                </InfoIcon>
-                <InfoContent>
-                  <InfoLabel>Payment Method</InfoLabel>
-                  <InfoValue>{order.paymentMethod}</InfoValue>
-                </InfoContent>
-              </InfoItem>
-              
-              {order.specialInstructions && (
+              {order.notes && (
                 <InfoItem>
                   <InfoIcon>
                     <Calendar size={20} />
                   </InfoIcon>
                   <InfoContent>
                     <InfoLabel>Special Instructions</InfoLabel>
-                    <InfoValue>{order.specialInstructions}</InfoValue>
+                    <InfoValue>{order.notes}</InfoValue>
                   </InfoContent>
                 </InfoItem>
               )}

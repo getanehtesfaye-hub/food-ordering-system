@@ -176,28 +176,22 @@ const ProfilePage = () => {
   const { user, logout } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState({
-    firstName: user?.firstName || '',
-    lastName: user?.lastName || '',
+    firstName: user?.username?.split(' ')[0] || '',
+    lastName: user?.username?.split(' ').slice(1).join(' ') || '',
     email: user?.email || '',
     phone: user?.phone || '',
     address: user?.address || '',
-    city: user?.city || '',
-    state: user?.state || '',
-    zipCode: user?.zipCode || ''
   });
 
   const handleEditToggle = () => {
     if (isEditing) {
       // Reset form to original values
       setEditForm({
-        firstName: user?.firstName || '',
-        lastName: user?.lastName || '',
+        firstName: user?.username?.split(' ')[0] || '',
+        lastName: user?.username?.split(' ').slice(1).join(' ') || '',
         email: user?.email || '',
         phone: user?.phone || '',
         address: user?.address || '',
-        city: user?.city || '',
-        state: user?.state || '',
-        zipCode: user?.zipCode || ''
       });
     }
     setIsEditing(!isEditing);
@@ -286,7 +280,7 @@ const ProfilePage = () => {
                       </InfoIcon>
                       <InfoContent>
                         <InfoLabel>Full Name</InfoLabel>
-                        <InfoValue>{user.firstName} {user.lastName}</InfoValue>
+                        <InfoValue>{user.username}</InfoValue>
                       </InfoContent>
                     </InfoItem>
                     <InfoItem>
@@ -321,28 +315,9 @@ const ProfilePage = () => {
                   <FormGrid>
                     <Input
                       name="address"
-                      label="Street Address"
+                      label="Delivery Address"
+                      placeholder="e.g. Bole Road, near Edna Mall, Addis Ababa"
                       value={editForm.address}
-                      onChange={handleInputChange}
-                    />
-                    <FormRow>
-                      <Input
-                        name="city"
-                        label="City"
-                        value={editForm.city}
-                        onChange={handleInputChange}
-                      />
-                      <Input
-                        name="state"
-                        label="State"
-                        value={editForm.state}
-                        onChange={handleInputChange}
-                      />
-                    </FormRow>
-                    <Input
-                      name="zipCode"
-                      label="ZIP Code"
-                      value={editForm.zipCode}
                       onChange={handleInputChange}
                     />
                   </FormGrid>
@@ -354,16 +329,7 @@ const ProfilePage = () => {
                       </InfoIcon>
                       <InfoContent>
                         <InfoLabel>Address</InfoLabel>
-                        <InfoValue>
-                          {user.address ? (
-                            <>
-                              {user.address}<br />
-                              {user.city}, {user.state} {user.zipCode}
-                            </>
-                          ) : (
-                            'Not provided'
-                          )}
-                        </InfoValue>
+                        <InfoValue>{user.address || 'Not provided'}</InfoValue>
                       </InfoContent>
                     </InfoItem>
                   </InfoGrid>

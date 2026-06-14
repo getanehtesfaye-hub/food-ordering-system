@@ -21,6 +21,7 @@ import { Card, CardBody, CardTitle } from '../components/UI/Card';
 import LoadingSpinner from '../components/UI/LoadingSpinner';
 import theme from '../styles/theme';
 import { foodAPI } from '../services/api';
+import { formatCurrency } from '../utils/currency';
 
 const FoodManagementContainer = styled.div`
   min-height: calc(100vh - 140px);
@@ -350,11 +351,13 @@ const AdminFoodManagement = () => {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingFood, setEditingFood] = useState(null);
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
   const [formData, setFormData] = useState({
     name: '',
     description: '',
     price: '',
-    category: '',
+    category: 'Burgers',
     status: 'available',
     prepTime: '',
     rating: 4.0,
@@ -403,7 +406,7 @@ const AdminFoodManagement = () => {
       'cheese burger': '/images/foods/cheese-burger.jpg',
       'margherita pizza': '/images/foods/pizza-margherita.jpg',
       'pepperoni pizza': '/images/foods/Pepperoni_pizza.jpg',
-      'spaghetti carbonara': '/images/foods/Spaghetti_Carbonara.jpg',
+      'spaghetti carbonara': '/images/foods/Spaghetti_Carbonar.jpg',
       'french fries': '/images/foods/french-fries.jpg',
       'pasta': '/images/foods/pasta.jpg',
       'salad': '/images/foods/salad.jpg',
@@ -557,18 +560,28 @@ const AdminFoodManagement = () => {
     setFilteredFoods(filtered);
   }, [searchTerm, selectedCategory, selectedStatus, foods]);
 
+  const handleImageChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setSelectedImage(file);
+      setImagePreview(URL.createObjectURL(file));
+    }
+  };
+
   const handleAddFood = () => {
     setEditingFood(null);
     setFormData({
       name: '',
       description: '',
       price: '',
-      category: 'main-course',
+      category: 'Burgers',
       status: 'available',
       prepTime: '',
-      rating: 0,
+      rating: 4.0,
       ingredients: ''
     });
+    setSelectedImage(null);
+    setImagePreview(null);
     setShowModal(true);
   };
 
@@ -578,12 +591,14 @@ const AdminFoodManagement = () => {
       name: food.name,
       description: food.description,
       price: food.price.toString(),
-      category: food.category_name,
+      category: food.category_name || 'Burgers',
       status: food.is_available ? 'available' : 'unavailable',
       prepTime: food.prepTime || '15-20 min',
       rating: food.rating || 4.0,
       ingredients: food.ingredients || 'Fresh ingredients'
     });
+    setSelectedImage(null);
+    setImagePreview(null);
     setShowModal(true);
   };
 
@@ -626,17 +641,20 @@ const AdminFoodManagement = () => {
     try {
       let response;
       
+      const formDataToSend = new FormData();
+      formDataToSend.append('name', formData.name);
+      formDataToSend.append('description', formData.description);
+      formDataToSend.append('price', parseFloat(formData.price));
+      formDataToSend.append('category_id', getCategoryByName(formData.category));
+      formDataToSend.append('is_available', formData.status === 'available');
+      if (formData.prepTime) formDataToSend.append('prepTime', formData.prepTime);
+      if (formData.ingredients) formDataToSend.append('ingredients', formData.ingredients);
+      if (selectedImage) {
+        formDataToSend.append('image', selectedImage);
+      }
+      
       if (editingFood) {
-        // Update existing food item
-        const updateData = {
-          name: formData.name,
-          description: formData.description,
-          price: parseFloat(formData.price),
-          category_id: getCategoryByName(formData.category), // Convert category name to ID
-          is_available: formData.status === 'available' // Convert status string to boolean
-        };
-        
-        response = await foodAPI.update(editingFood.id, updateData);
+        response = await foodAPI.update(editingFood.id, formDataToSend);
         if (response.success) {
           setFoods(prev => prev.map(food => 
             food.id === editingFood.id 
@@ -648,16 +666,7 @@ const AdminFoodManagement = () => {
           return;
         }
       } else {
-        // Create new food item
-        const createData = {
-          name: formData.name,
-          description: formData.description,
-          price: parseFloat(formData.price),
-          category_id: getCategoryByName(formData.category), // Convert category name to ID
-          is_available: formData.status === 'available' // Convert status string to boolean
-        };
-        
-        response = await foodAPI.create(createData);
+        response = await foodAPI.create(formDataToSend);
         if (response.success) {
           setFoods(prev => [...prev, response.data.food_item]);
         } else {
@@ -667,6 +676,8 @@ const AdminFoodManagement = () => {
       }
       
       setShowModal(false);
+      setSelectedImage(null);
+      setImagePreview(null);
     } catch (error) {
       console.error('Error saving food:', error);
       alert('Failed to save food item');
@@ -679,8 +690,8 @@ const AdminFoodManagement = () => {
       'Burgers': 1,
       'Pizza': 2, 
       'Pasta': 3,
-      'Desserts': 4,
-      'Drinks': 5,
+      'Drinks': 4,
+      'Desserts': 5,
       'Salads': 6
     };
     return categoryMap[categoryName] || 1; // Default to Burgers if not found
@@ -766,7 +777,7 @@ const AdminFoodManagement = () => {
             <FoodCard key={food.id}>
               <FoodImage>
                 <img 
-                  src={getFoodImage(food.name, index)} 
+                  src={food.image_url ? (food.image_url.startsWith('http') ? food.image_url : `http://localhost:5000${food.image_url}`) : getFoodImage(food.name, index)} 
                   alt={food.name}
                   onError={(e) => {
                     e.target.style.display = 'none';
@@ -800,7 +811,7 @@ const AdminFoodManagement = () => {
                   </div>
                 </FoodMeta>
                 
-                <FoodPrice>${parseFloat(food.price).toFixed(2)}</FoodPrice>
+                <FoodPrice>{formatCurrency(food.price)}</FoodPrice>
                 
                 <FoodActions>
                   <ActionButton variant="outline" onClick={() => handleEditFood(food)}>
@@ -865,7 +876,7 @@ const AdminFoodManagement = () => {
                   <FormRow>
                     <Input
                       name="price"
-                      label="Price (e.g., 12.99)"
+                      label="Price in ETB (e.g., 280.00)"
                       type="number"
                       step="0.01"
                       value={formData.price}
@@ -939,6 +950,41 @@ const AdminFoodManagement = () => {
                     value={formData.ingredients}
                     onChange={handleInputChange}
                   />
+
+                  <div style={{ display: 'grid', gap: theme.spacing.sm }}>
+                    <label style={{ fontWeight: theme.typography.fontWeight.medium }}>
+                      Food Photo
+                    </label>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageChange}
+                      style={{ display: 'none' }}
+                      id="food-image-file"
+                    />
+                    <div style={{ display: 'flex', alignItems: 'center', gap: theme.spacing.md }}>
+                      <Button as="label" htmlFor="food-image-file" variant="outline" type="button" style={{ cursor: 'pointer', margin: 0 }}>
+                        Choose File
+                      </Button>
+                      <span style={{ fontSize: theme.typography.fontSize.sm, color: theme.colors.gray[600] }}>
+                        {selectedImage ? selectedImage.name : (editingFood?.image_url ? 'Keep current image' : 'No file chosen')}
+                      </span>
+                      {imagePreview && (
+                        <img 
+                          src={imagePreview} 
+                          alt="Preview" 
+                          style={{ width: '40px', height: '40px', objectFit: 'cover', borderRadius: theme.borderRadius.sm, marginLeft: 'auto' }} 
+                        />
+                      )}
+                      {!imagePreview && editingFood?.image_url && (
+                        <img 
+                          src={editingFood.image_url.startsWith('http') ? editingFood.image_url : `http://localhost:5000${editingFood.image_url}`} 
+                          alt="Current" 
+                          style={{ width: '40px', height: '40px', objectFit: 'cover', borderRadius: theme.borderRadius.sm, marginLeft: 'auto' }} 
+                        />
+                      )}
+                    </div>
+                  </div>
                   
                   <div style={{ display: 'flex', gap: theme.spacing.md, marginTop: theme.spacing.xl }}>
                     <Button type="submit">

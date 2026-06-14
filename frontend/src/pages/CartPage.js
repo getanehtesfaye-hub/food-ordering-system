@@ -5,6 +5,7 @@ import { ShoppingCart, Plus, Minus, Trash2, ArrowLeft, CreditCard } from 'lucide
 import { useCart } from '../context/CartContext';
 import Button from '../components/UI/Button';
 import { Card, CardBody, CardTitle } from '../components/UI/Card';
+import { formatCurrency, calculateTax, calculateDeliveryFee } from '../utils/currency';
 import theme from '../styles/theme';
 
 const CartContainer = styled.div`
@@ -260,8 +261,8 @@ const CartPage = () => {
   };
 
   const subtotal = getTotalPrice();
-  const tax = subtotal * 0.08; // 8% tax
-  const deliveryFee = subtotal > 50 ? 0 : 4.99; // Free delivery over $50
+  const tax = calculateTax(subtotal);
+  const deliveryFee = calculateDeliveryFee(subtotal, true);
   const total = subtotal + tax + deliveryFee;
 
   if (!items || !Array.isArray(items) || items.length === 0) {
@@ -319,7 +320,7 @@ const CartPage = () => {
               <ItemDetails>
                 <ItemName>{item.name}</ItemName>
                 <ItemDescription>{item.description}</ItemDescription>
-                <ItemPrice>${(parseFloat(item.price) * item.quantity).toFixed(2)}</ItemPrice>
+                <ItemPrice>{formatCurrency(parseFloat(item.price) * item.quantity)}</ItemPrice>
               </ItemDetails>
               
               <ItemControls>
@@ -353,24 +354,24 @@ const CartPage = () => {
             
             <SummaryItem>
               <span>Subtotal</span>
-              <span>${subtotal.toFixed(2)}</span>
+              <span>{formatCurrency(subtotal)}</span>
             </SummaryItem>
             
             <SummaryItem>
-              <span>Tax (8%)</span>
-              <span>${tax.toFixed(2)}</span>
+              <span>Tax (15%)</span>
+              <span>{formatCurrency(tax)}</span>
             </SummaryItem>
             
             <SummaryItem>
               <span>Delivery Fee</span>
               <span>
-                {deliveryFee === 0 ? 'FREE' : `$${deliveryFee.toFixed(2)}`}
+                {deliveryFee === 0 ? 'FREE' : formatCurrency(deliveryFee)}
               </span>
             </SummaryItem>
             
             <SummaryTotal>
               <span>Total</span>
-              <span>${total.toFixed(2)}</span>
+              <span>{formatCurrency(total)}</span>
             </SummaryTotal>
             
             <CheckoutButton as={Link} to="/checkout" size="lg">

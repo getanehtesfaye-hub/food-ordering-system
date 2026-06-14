@@ -47,7 +47,7 @@ class FoodItem {
     
     // Search by name
     if (filters.search) {
-      sql += ' AND fi.name LIKE ?';
+      sql += ' AND fi.name ILIKE ?';
       params.push(`%${filters.search}%`);
     }
     
@@ -180,7 +180,7 @@ class FoodItem {
     }
     
     if (filters.search) {
-      query += ' AND name LIKE ?';
+      query += ' AND name ILIKE ?';
       params.push(`%${filters.search}%`);
     }
     

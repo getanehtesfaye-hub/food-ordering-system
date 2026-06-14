@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import styled from 'styled-components';
+import toast from 'react-hot-toast';
 import { 
   Search, 
   Filter, 
@@ -11,14 +12,11 @@ import {
   Clock, 
   Truck, 
   Package,
-  Calendar,
-  DollarSign,
-  User,
-  Phone,
-  MapPin,
   RefreshCw
 } from 'lucide-react';
 import { orderAPI } from '../services/api';
+import { ORDER_STATUSES, ORDER_STATUS_LIST, formatOrderStatus } from '../utils/orderStatus';
+import { formatCurrency } from '../utils/currency';
 import Button from '../components/UI/Button';
 import Input from '../components/UI/Input';
 import { Card, CardBody, CardTitle } from '../components/UI/Card';
@@ -211,11 +209,6 @@ const OrderStatus = styled.div.withConfig({
           background-color: ${theme.colors.warning}20;
           color: ${theme.colors.warning};
         `;
-      case 'confirmed':
-        return `
-          background-color: ${theme.colors.info}20;
-          color: ${theme.colors.info};
-        `;
       case 'preparing':
         return `
           background-color: ${theme.colors.primary}20;
@@ -225,11 +218,6 @@ const OrderStatus = styled.div.withConfig({
         return `
           background-color: ${theme.colors.success}20;
           color: ${theme.colors.success};
-        `;
-      case 'delivering':
-        return `
-          background-color: ${theme.colors.primaryLight}20;
-          color: ${theme.colors.primaryLight};
         `;
       case 'delivered':
         return `
@@ -366,6 +354,32 @@ const EmptyMessage = styled.div`
   font-size: ${theme.typography.fontSize.lg};
 `;
 
+const ConfirmText = styled.p`
+  color: ${theme.colors.gray[600]};
+  margin-bottom: ${theme.spacing.lg};
+  line-height: 1.6;
+`;
+
+const ApproveButton = styled(Button)`
+  background-color: ${theme.colors.success};
+  border-color: ${theme.colors.success};
+
+  &:hover:not(:disabled) {
+    background-color: #157347;
+    border-color: #157347;
+  }
+`;
+
+const CancelOrderButton = styled(Button)`
+  color: ${theme.colors.error};
+  border-color: ${theme.colors.error};
+
+  &:hover:not(:disabled) {
+    background-color: ${theme.colors.error};
+    color: ${theme.colors.white};
+  }
+`;
+
 const AdminOrdersManagement = () => {
   const [orders, setOrders] = useState([]);
   const [filteredOrders, setFilteredOrders] = useState([]);
@@ -373,19 +387,19 @@ const AdminOrdersManagement = () => {
   const [selectedStatus, setSelectedStatus] = useState('all');
   const [selectedDate, setSelectedDate] = useState('all');
   const [loading, setLoading] = useState(true);
+  const [updatingOrderId, setUpdatingOrderId] = useState(null);
   const [showStatusModal, setShowStatusModal] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [confirmAction, setConfirmAction] = useState(null);
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [newStatus, setNewStatus] = useState('');
 
   const statuses = [
     { value: 'all', label: 'All Status' },
-    { value: 'pending', label: 'Pending' },
-    { value: 'confirmed', label: 'Confirmed' },
-    { value: 'preparing', label: 'Preparing' },
-    { value: 'ready', label: 'Ready' },
-    { value: 'delivering', label: 'Delivering' },
-    { value: 'delivered', label: 'Delivered' },
-    { value: 'cancelled', label: 'Cancelled' }
+    ...ORDER_STATUS_LIST.map((value) => ({
+      value,
+      label: ORDER_STATUSES[value].label,
+    })),
   ];
 
   const dateFilters = [
@@ -393,54 +407,45 @@ const AdminOrdersManagement = () => {
     { value: 'today', label: 'Today' },
     { value: 'yesterday', label: 'Yesterday' },
     { value: 'week', label: 'This Week' },
-    { value: 'month', label: 'This Month' }
+    { value: 'month', label: 'This Month' },
   ];
 
-  const statusOptions = [
-    { value: 'pending', label: 'Pending', description: 'Order received, awaiting confirmation' },
-    { value: 'confirmed', label: 'Confirmed', description: 'Order confirmed and being prepared' },
-    { value: 'preparing', label: 'Preparing', description: 'Food is being prepared' },
-    { value: 'ready', label: 'Ready', description: 'Food is ready for pickup/delivery' },
-    { value: 'delivering', label: 'Delivering', description: 'Order is out for delivery' },
-    { value: 'delivered', label: 'Delivered', description: 'Order has been delivered' },
-    { value: 'cancelled', label: 'Cancelled', description: 'Order was cancelled' }
-  ];
+  const statusOptions = ORDER_STATUS_LIST.map((value) => ({
+    value,
+    label: ORDER_STATUSES[value].label,
+    description: ORDER_STATUSES[value].description,
+  }));
 
   const statusIcons = {
     pending: Clock,
-    confirmed: CheckCircle,
-    preparing: Clock,
+    preparing: Package,
     ready: CheckCircle,
-    delivering: Truck,
-    delivered: CheckCircle,
-    cancelled: XCircle
+    delivered: Truck,
+    cancelled: XCircle,
   };
 
-  useEffect(() => {
-    const loadOrders = async () => {
-      try {
-        setLoading(true);
-        const response = await orderAPI.getAllOrders();
-        
-        if (response.success) {
-          setOrders(response.data?.orders || []);
-          setFilteredOrders(response.data?.orders || []);
-        } else {
-          console.error('Failed to load orders:', response.message);
-          setOrders([]);
-          setFilteredOrders([]);
-        }
-      } catch (error) {
-        console.error('Error loading orders:', error);
-        setOrders([]);
-        setFilteredOrders([]);
-      } finally {
-        setLoading(false);
-      }
-    };
+  const loadOrders = useCallback(async () => {
+    try {
+      setLoading(true);
+      const response = await orderAPI.getAllOrders();
 
-    loadOrders();
+      if (response.success) {
+        setOrders(response.data?.orders || []);
+      } else {
+        toast.error(response.message || 'Failed to load orders');
+        setOrders([]);
+      }
+    } catch (error) {
+      toast.error('Failed to load orders');
+      setOrders([]);
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    loadOrders();
+  }, [loadOrders]);
 
   useEffect(() => {
     let filtered = orders;
@@ -463,7 +468,7 @@ const AdminOrdersManagement = () => {
       const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
       
       filtered = filtered.filter(order => {
-        const orderDate = new Date(order.date);
+        const orderDate = new Date(order.created_at);
         
         switch (selectedDate) {
           case 'today':
@@ -489,6 +494,12 @@ const AdminOrdersManagement = () => {
     setFilteredOrders(filtered);
   }, [searchTerm, selectedStatus, selectedDate, orders]);
 
+  const updateOrderInList = (orderId, updates) => {
+    setOrders((prev) =>
+      prev.map((order) => (order.id === orderId ? { ...order, ...updates } : order))
+    );
+  };
+
   const handleStatusUpdate = (order) => {
     setSelectedOrder(order);
     setNewStatus(order.status);
@@ -499,16 +510,86 @@ const AdminOrdersManagement = () => {
     setNewStatus(status);
   };
 
-  const handleSaveStatus = () => {
-    if (selectedOrder && newStatus) {
-      setOrders(prev => prev.map(order => 
-        order.id === selectedOrder.id 
-          ? { ...order, status: newStatus }
-          : order
-      ));
+  const handleSaveStatus = async () => {
+    if (!selectedOrder || !newStatus || newStatus === selectedOrder.status) {
       setShowStatusModal(false);
+      return;
+    }
+
+    try {
+      setUpdatingOrderId(selectedOrder.id);
+      const response = await orderAPI.updateStatus(selectedOrder.id, newStatus);
+
+      if (response.success) {
+        updateOrderInList(selectedOrder.id, { status: newStatus });
+        toast.success(`Order #${selectedOrder.id} marked as ${formatOrderStatus(newStatus)}`);
+        setShowStatusModal(false);
+        setSelectedOrder(null);
+        setNewStatus('');
+      } else {
+        toast.error(response.message || 'Failed to update order status');
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to update order status');
+    } finally {
+      setUpdatingOrderId(null);
+    }
+  };
+
+  const handleApproveOrder = (order) => {
+    setSelectedOrder(order);
+    setConfirmAction({
+      type: 'approve',
+      title: 'Approve Order',
+      message: `Approve order #${order.id} and send it to the kitchen?`,
+      confirmLabel: 'Approve Order',
+    });
+    setShowConfirmModal(true);
+  };
+
+  const handleCancelOrder = (order) => {
+    setSelectedOrder(order);
+    setConfirmAction({
+      type: 'cancel',
+      title: 'Cancel Order',
+      message: `Are you sure you want to cancel order #${order.id}? This cannot be undone.`,
+      confirmLabel: 'Cancel Order',
+    });
+    setShowConfirmModal(true);
+  };
+
+  const handleConfirmAction = async () => {
+    if (!selectedOrder || !confirmAction) return;
+
+    try {
+      setUpdatingOrderId(selectedOrder.id);
+
+      if (confirmAction.type === 'approve') {
+        const response = await orderAPI.updateStatus(selectedOrder.id, 'preparing');
+        if (response.success) {
+          updateOrderInList(selectedOrder.id, { status: 'preparing' });
+          toast.success(`Order #${selectedOrder.id} approved and sent to kitchen`);
+        } else {
+          toast.error(response.message || 'Failed to approve order');
+        }
+      }
+
+      if (confirmAction.type === 'cancel') {
+        const response = await orderAPI.cancelOrder(selectedOrder.id);
+        if (response.success) {
+          updateOrderInList(selectedOrder.id, { status: 'cancelled' });
+          toast.success(`Order #${selectedOrder.id} has been cancelled`);
+        } else {
+          toast.error(response.message || 'Failed to cancel order');
+        }
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Action failed. Please try again.');
+    } finally {
+      setUpdatingOrderId(null);
+      setShowConfirmModal(false);
+      setConfirmAction(null);
       setSelectedOrder(null);
-      setNewStatus('');
     }
   };
 
@@ -529,13 +610,6 @@ const AdminOrdersManagement = () => {
     }
   };
 
-  const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD'
-    }).format(amount);
-  };
-
   if (loading) {
     return (
       <OrdersManagementContainer>
@@ -552,7 +626,7 @@ const AdminOrdersManagement = () => {
           <ManagementSubtitle>Manage and track all customer orders</ManagementSubtitle>
         </HeaderTitle>
         <HeaderActions>
-          <Button onClick={() => window.location.reload()}>
+          <Button onClick={loadOrders} disabled={loading}>
             <RefreshCw size={20} />
             Refresh
           </Button>
@@ -632,11 +706,11 @@ const AdminOrdersManagement = () => {
                       <TableCell>
                         <OrderStatus status={order.status}>
                           <StatusIcon size={14} />
-                          {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
+                          {formatOrderStatus(order.status)}
                         </OrderStatus>
                       </TableCell>
                       <TableCell>
-                        <OrderAmount>${parseFloat(order.total_amount).toFixed(2)}</OrderAmount>
+                        <OrderAmount>{formatCurrency(order.total_amount)}</OrderAmount>
                       </TableCell>
                       <TableCell>
                         {formatDate(order.created_at)}
@@ -646,9 +720,31 @@ const AdminOrdersManagement = () => {
                           <ActionButton variant="outline" as={Link} to={`/orders/${order.id}`}>
                             <Eye size={14} />
                           </ActionButton>
-                          <ActionButton 
-                            variant="outline" 
+                          {order.status === 'pending' && (
+                            <ApproveButton
+                              size="small"
+                              onClick={() => handleApproveOrder(order)}
+                              disabled={updatingOrderId === order.id}
+                            >
+                              <CheckCircle size={14} />
+                              Approve
+                            </ApproveButton>
+                          )}
+                          {['pending', 'preparing'].includes(order.status) && (
+                            <CancelOrderButton
+                              size="small"
+                              variant="outline"
+                              onClick={() => handleCancelOrder(order)}
+                              disabled={updatingOrderId === order.id}
+                            >
+                              <XCircle size={14} />
+                              Cancel
+                            </CancelOrderButton>
+                          )}
+                          <ActionButton
+                            variant="outline"
                             onClick={() => handleStatusUpdate(order)}
+                            disabled={updatingOrderId === order.id}
                           >
                             <Edit2 size={14} />
                           </ActionButton>
@@ -683,7 +779,7 @@ const AdminOrdersManagement = () => {
               <div style={{ marginBottom: theme.spacing.lg }}>
                 <p><strong>Order:</strong> #{selectedOrder.id}</p>
                 <p><strong>Customer:</strong> {selectedOrder.username || 'Unknown'}</p>
-                <p><strong>Current Status:</strong> {selectedOrder.status.charAt(0).toUpperCase() + selectedOrder.status.slice(1)}</p>
+                <p><strong>Current Status:</strong> {formatOrderStatus(selectedOrder.status)}</p>
               </div>
               
               <StatusOptions>
@@ -713,14 +809,51 @@ const AdminOrdersManagement = () => {
               </StatusOptions>
               
               <div style={{ display: 'flex', gap: theme.spacing.md, marginTop: theme.spacing.xl }}>
-                <Button onClick={handleSaveStatus}>
-                  Update Status
+                <Button onClick={handleSaveStatus} disabled={updatingOrderId === selectedOrder.id}>
+                  {updatingOrderId === selectedOrder.id ? 'Updating...' : 'Update Status'}
                 </Button>
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   onClick={() => setShowStatusModal(false)}
+                  disabled={updatingOrderId === selectedOrder.id}
                 >
-                  Cancel
+                  Close
+                </Button>
+              </div>
+            </CardBody>
+          </ModalContent>
+        </StatusModal>
+      )}
+
+      {showConfirmModal && selectedOrder && confirmAction && (
+        <StatusModal>
+          <ModalContent>
+            <CardBody>
+              <ModalHeader>
+                <ModalTitle>{confirmAction.title}</ModalTitle>
+                <CloseButton onClick={() => setShowConfirmModal(false)}>×</CloseButton>
+              </ModalHeader>
+
+              <ConfirmText>{confirmAction.message}</ConfirmText>
+
+              <div style={{ display: 'flex', gap: theme.spacing.md }}>
+                {confirmAction.type === 'approve' ? (
+                  <ApproveButton
+                    onClick={handleConfirmAction}
+                    disabled={updatingOrderId === selectedOrder.id}
+                  >
+                    {confirmAction.confirmLabel}
+                  </ApproveButton>
+                ) : (
+                  <CancelOrderButton
+                    onClick={handleConfirmAction}
+                    disabled={updatingOrderId === selectedOrder.id}
+                  >
+                    {confirmAction.confirmLabel}
+                  </CancelOrderButton>
+                )}
+                <Button variant="outline" onClick={() => setShowConfirmModal(false)}>
+                  Go Back
                 </Button>
               </div>
             </CardBody>

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
-import { authAPI } from '../services/api';
+import { authAPI, handleApiError } from '../services/api';
 import toast from 'react-hot-toast';
 
 const AuthContext = createContext();
@@ -144,7 +144,7 @@ export const AuthProvider = ({ children }) => {
       }
     } catch (error) {
       dispatch({ type: AUTH_ACTIONS.LOGIN_FAILURE });
-      const message = error.response?.data?.message || 'Login failed';
+      const { message } = handleApiError(error);
       toast.error(message);
       return { success: false, message };
     }
@@ -176,7 +176,7 @@ export const AuthProvider = ({ children }) => {
       }
     } catch (error) {
       dispatch({ type: AUTH_ACTIONS.REGISTER_FAILURE });
-      const message = error.response?.data?.message || 'Registration failed';
+      const { message } = handleApiError(error);
       toast.error(message);
       return { success: false, message };
     }

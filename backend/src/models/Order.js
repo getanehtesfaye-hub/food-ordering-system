@@ -3,7 +3,7 @@ const { query, queryOne, insert, execute, beginTransaction, commitTransaction, r
 class Order {
   // Create new order
   static async create(orderData) {
-    const connection = await beginTransaction();
+    const client = await beginTransaction();
     
     try {
       const { user_id, items, delivery_address, phone, notes } = orderData;
@@ -11,7 +11,11 @@ class Order {
       // Calculate total amount
       let totalAmount = 0;
       for (const item of items) {
-        const foodItem = await queryOne('SELECT price FROM food_items WHERE id = ?', [item.food_item_id]);
+        const foodItem = await queryOne(
+          'SELECT price FROM food_items WHERE id = ?',
+          [item.food_item_id],
+          client
+        );
         if (!foodItem) {
           throw new Error(`Food item with ID ${item.food_item_id} not found`);
         }
@@ -21,28 +25,34 @@ class Order {
       // Create order
       const orderId = await insert(
         'INSERT INTO orders (user_id, total_amount, delivery_address, phone, notes) VALUES (?, ?, ?, ?, ?)',
-        [user_id, totalAmount, delivery_address, phone, notes]
+        [user_id, totalAmount, delivery_address, phone, notes],
+        client
       );
       
       // Add order items
       for (const item of items) {
-        const foodItem = await queryOne('SELECT price FROM food_items WHERE id = ?', [item.food_item_id]);
+        const foodItem = await queryOne(
+          'SELECT price FROM food_items WHERE id = ?',
+          [item.food_item_id],
+          client
+        );
         await execute(
           'INSERT INTO order_items (order_id, food_item_id, quantity, price) VALUES (?, ?, ?, ?)',
-          [orderId, item.food_item_id, item.quantity, foodItem.price]
+          [orderId, item.food_item_id, item.quantity, foodItem.price],
+          client
         );
       }
       
       // Clear user's cart if logged in
       if (user_id) {
-        await execute('DELETE FROM cart WHERE user_id = ?', [user_id]);
+        await execute('DELETE FROM cart WHERE user_id = ?', [user_id], client);
       }
       
-      await commitTransaction(connection);
+      await commitTransaction(client);
       
       return this.findById(orderId);
     } catch (error) {
-      await rollbackTransaction(connection);
+      await rollbackTransaction(client);
       throw error;
     }
   }
@@ -199,20 +209,20 @@ class Order {
   static async getDailySales(days = 7) {
     return await query(`
       SELECT 
-        DATE(created_at) as date,
+        created_at::date as date,
         COUNT(*) as orders,
         SUM(total_amount) as revenue
       FROM orders 
-      WHERE created_at >= DATE_SUB(CURRENT_DATE, INTERVAL ? DAY)
+      WHERE created_at >= CURRENT_DATE - (?::text || ' days')::interval
         AND status != 'cancelled'
-      GROUP BY DATE(created_at)
+      GROUP BY created_at::date
       ORDER BY date DESC
     `, [days]);
   }
 
   // Get popular items
   static async getPopularItems(limit = 10, filters = {}) {
-    let whereClause = 'WHERE o.status != "cancelled"';
+    let whereClause = "WHERE o.status != 'cancelled'";
     const params = [];
     
     if (filters.start_date) {

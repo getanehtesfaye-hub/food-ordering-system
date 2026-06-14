@@ -91,16 +91,19 @@ class Category {
   // Get categories with food items
   static async getWithFoodItems() {
     return await query(`
-      SELECT c.*, 
-        JSON_ARRAYAGG(
-          JSON_OBJECT(
-            'id', fi.id,
-            'name', fi.name,
-            'description', fi.description,
-            'price', fi.price,
-            'image_url', fi.image_url,
-            'is_available', fi.is_available
-          )
+      SELECT c.*,
+        COALESCE(
+          json_agg(
+            json_build_object(
+              'id', fi.id,
+              'name', fi.name,
+              'description', fi.description,
+              'price', fi.price,
+              'image_url', fi.image_url,
+              'is_available', fi.is_available
+            )
+          ) FILTER (WHERE fi.id IS NOT NULL),
+          '[]'::json
         ) as food_items
       FROM categories c
       LEFT JOIN food_items fi ON c.id = fi.category_id

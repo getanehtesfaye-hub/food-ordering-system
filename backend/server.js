@@ -3,8 +3,7 @@ const cors = require('cors');
 const path = require('path');
 require('dotenv').config();
 
-// Test database connection
-const { testConnection } = require('./src/config/database');
+const { testConnection, closePool } = require('./src/config/database');
 testConnection();
 
 const app = express();
@@ -59,6 +58,17 @@ app.use('*', (req, res) => {
 
 const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
+
+const shutdown = async (signal) => {
+  console.log(`${signal} received, shutting down gracefully`);
+  server.close(async () => {
+    await closePool();
+    process.exit(0);
+  });
+};
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));

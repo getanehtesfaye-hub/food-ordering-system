@@ -7,7 +7,6 @@ import {
   Clock, 
   CheckCircle, 
   XCircle, 
-  Truck, 
   Package,
   Eye
 } from 'lucide-react';
@@ -16,6 +15,8 @@ import { Card, CardBody, CardTitle } from '../components/UI/Card';
 import LoadingSpinner from '../components/UI/LoadingSpinner';
 import theme from '../styles/theme';
 import { orderAPI } from '../services/api';
+import { ORDER_STATUS_LIST, formatOrderStatus } from '../utils/orderStatus';
+import { formatCurrency } from '../utils/currency';
 
 const OrdersContainer = styled.div`
   min-height: calc(100vh - 140px);
@@ -110,10 +111,8 @@ const StatusIcon = styled.div`
   color: ${props => {
     const statusColors = {
       pending: theme.colors.warning,
-      confirmed: theme.colors.info,
       preparing: theme.colors.primary,
       ready: theme.colors.success,
-      delivering: theme.colors.primary,
       delivered: theme.colors.success,
       cancelled: theme.colors.error
     };
@@ -165,10 +164,8 @@ const EmptyMessage = styled.div`
 
 const statusIcons = {
   pending: Clock,
-  confirmed: CheckCircle,
   preparing: Clock,
   ready: CheckCircle,
-  delivering: Truck,
   delivered: CheckCircle,
   cancelled: XCircle
 };
@@ -191,33 +188,24 @@ const OrdersPage = () => {
 
   const filters = [
     { key: 'all', label: 'All Orders' },
-    { key: 'pending', label: 'Pending' },
-    { key: 'confirmed', label: 'Confirmed' },
-    { key: 'preparing', label: 'Preparing' },
-    { key: 'ready', label: 'Ready' },
-    { key: 'delivering', label: 'Delivering' },
-    { key: 'delivered', label: 'Delivered' },
-    { key: 'cancelled', label: 'Cancelled' }
+    ...ORDER_STATUS_LIST.map((status) => ({
+      key: status,
+      label: formatOrderStatus(status),
+    })),
   ];
 
   useEffect(() => {
     const loadOrders = async () => {
       try {
         setLoading(true);
-        console.log('Loading orders...');
         const response = await orderAPI.getUserOrders();
-        console.log('Orders response:', response);
-        
+
         if (response.success) {
-          console.log('Orders data:', response.data);
           setOrders(response.data?.orders || []);
-          console.log('Orders set:', response.data?.orders);
         } else {
-          console.error('Failed to load orders:', response.message);
           setOrders([]);
         }
       } catch (error) {
-        console.error('Error loading orders:', error);
         setOrders([]);
       } finally {
         setLoading(false);
@@ -286,7 +274,7 @@ const OrdersPage = () => {
                 <OrderDetails>
                   <CustomerInfo>
                     <CustomerName>{order.username || 'Guest'}</CustomerName>
-                    <OrderAmount>${parseFloat(order.total_amount).toFixed(2)}</OrderAmount>
+                    <OrderAmount>{formatCurrency(order.total_amount)}</OrderAmount>
                   </CustomerInfo>
                 </OrderDetails>
                 <OrderActions>

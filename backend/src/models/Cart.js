@@ -130,9 +130,12 @@ class Cart {
   // Remove unavailable items from cart
   static async removeUnavailableItems(userId) {
     await execute(`
-      DELETE c FROM cart c
-      LEFT JOIN food_items fi ON c.food_item_id = fi.id
-      WHERE c.user_id = ? AND (fi.id IS NULL OR fi.is_available = false)
+      DELETE FROM cart c
+      WHERE c.user_id = ?
+      AND (
+        NOT EXISTS (SELECT 1 FROM food_items fi WHERE fi.id = c.food_item_id)
+        OR EXISTS (SELECT 1 FROM food_items fi WHERE fi.id = c.food_item_id AND fi.is_available = false)
+      )
     `, [userId]);
     
     return this.getUserCart(userId);
