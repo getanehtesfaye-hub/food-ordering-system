@@ -30,3 +30,6 @@ backend/uploads/*
 
 # Test coverage
 coverage/
+
+.vercel
+.env*
