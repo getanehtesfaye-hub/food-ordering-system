@@ -8,7 +8,7 @@ const { authenticateToken, requireAdmin, optionalAuth } = require('../middleware
 
 const router = express.Router();
 
-// Configure multer for file uploads
+// ================= MULTER CONFIG =================
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, 'uploads/');
@@ -22,7 +22,7 @@ const storage = multer.diskStorage({
 const upload = multer({
   storage,
   limits: {
-    fileSize: parseInt(process.env.MAX_FILE_SIZE) || 5 * 1024 * 1024 // 5MB
+    fileSize: parseInt(process.env.MAX_FILE_SIZE) || 5 * 1024 * 1024
   },
   fileFilter: (req, file, cb) => {
     const allowedTypes = /jpeg|jpg|png|gif|webp/;
@@ -37,7 +37,7 @@ const upload = multer({
   }
 });
 
-// Validation middleware
+// ================= VALIDATION =================
 const handleValidationErrors = (req, res, next) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
@@ -50,7 +50,14 @@ const handleValidationErrors = (req, res, next) => {
   next();
 };
 
-// Get all food items (public route)
+
+
+// =======================================================
+// PUBLIC ROUTES (IMPORTANT ORDER FIX)
+// =======================================================
+
+
+// 1. GET ALL FOOD ITEMS
 router.get('/', optionalAuth, async (req, res) => {
   try {
     const {
@@ -92,6 +99,7 @@ router.get('/', optionalAuth, async (req, res) => {
         }
       }
     });
+
   } catch (error) {
     console.error('Get food items error:', error.message);
     res.status(500).json({
@@ -101,11 +109,56 @@ router.get('/', optionalAuth, async (req, res) => {
   }
 });
 
-// Get single food item (public route)
+
+
+// 2. POPULAR ITEMS (FIXED ORDER ISSUE)
+router.get('/popular/list', optionalAuth, async (req, res) => {
+  try {
+    const { limit = 10 } = req.query;
+    const popularItems = await FoodItem.getPopular(parseInt(limit));
+
+    res.json({
+      success: true,
+      data: { popular_items: popularItems }
+    });
+
+  } catch (error) {
+    console.error('Get popular items error:', error.message);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching popular items'
+    });
+  }
+});
+
+
+
+// 3. CATEGORY ITEMS
+router.get('/category/:categoryId', optionalAuth, async (req, res) => {
+  try {
+    const foodItems = await FoodItem.getByCategory(req.params.categoryId);
+
+    res.json({
+      success: true,
+      data: { food_items: foodItems }
+    });
+
+  } catch (error) {
+    console.error('Get food items by category error:', error.message);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching food items by category'
+    });
+  }
+});
+
+
+
+// 4. SINGLE FOOD ITEM (⚠ MUST BE LAST OF PUBLIC ROUTES)
 router.get('/:id', optionalAuth, async (req, res) => {
   try {
     const foodItem = await FoodItem.findById(req.params.id);
-    
+
     if (!foodItem) {
       return res.status(404).json({
         success: false,
@@ -117,6 +170,7 @@ router.get('/:id', optionalAuth, async (req, res) => {
       success: true,
       data: { food_item: foodItem }
     });
+
   } catch (error) {
     console.error('Get food item error:', error.message);
     res.status(500).json({
@@ -126,35 +180,24 @@ router.get('/:id', optionalAuth, async (req, res) => {
   }
 });
 
-// Create food item (admin only)
+
+
+// =======================================================
+// ADMIN ROUTES
+// =======================================================
+
+// CREATE FOOD ITEM
 router.post('/', [
   authenticateToken,
   requireAdmin,
   upload.single('image'),
-  body('name')
-    .trim()
-    .isLength({ min: 1, max: 100 })
-    .withMessage('Name must be between 1 and 100 characters'),
-  body('description')
-    .optional()
-    .trim()
-    .isLength({ max: 1000 })
-    .withMessage('Description must be less than 1000 characters'),
-  body('price')
-    .isFloat({ min: 0 })
-    .withMessage('Price must be a positive number'),
-  body('category_id')
-    .isInt({ min: 1 })
-    .withMessage('Category ID must be a positive integer'),
-  body('is_available')
-    .optional()
-    .isBoolean()
-    .withMessage('is_available must be a boolean')
+  body('name').trim().isLength({ min: 1, max: 100 }),
+  body('price').isFloat({ min: 0 }),
+  body('category_id').isInt({ min: 1 })
 ], handleValidationErrors, async (req, res) => {
   try {
     const { name, description, price, category_id, is_available } = req.body;
-    
-    // Check if category exists
+
     const category = await Category.findById(category_id);
     if (!category) {
       return res.status(400).json({
@@ -176,9 +219,9 @@ router.post('/', [
 
     res.status(201).json({
       success: true,
-      message: 'Food item created successfully',
       data: { food_item: foodItem }
     });
+
   } catch (error) {
     console.error('Create food item error:', error.message);
     res.status(500).json({
@@ -188,72 +231,25 @@ router.post('/', [
   }
 });
 
-// Update food item (admin only)
+
+
+// UPDATE FOOD ITEM
 router.put('/:id', [
   authenticateToken,
   requireAdmin,
-  upload.single('image'),
-  body('name')
-    .optional()
-    .trim()
-    .isLength({ min: 1, max: 100 })
-    .withMessage('Name must be between 1 and 100 characters'),
-  body('description')
-    .optional()
-    .trim()
-    .isLength({ max: 1000 })
-    .withMessage('Description must be less than 1000 characters'),
-  body('price')
-    .optional()
-    .isFloat({ min: 0 })
-    .withMessage('Price must be a positive number'),
-  body('category_id')
-    .optional()
-    .isInt({ min: 1 })
-    .withMessage('Category ID must be a positive integer'),
-  body('is_available')
-    .optional()
-    .isBoolean()
-    .withMessage('is_available must be a boolean')
-], handleValidationErrors, async (req, res) => {
+  upload.single('image')
+], async (req, res) => {
   try {
-    const { name, description, price, category_id, is_available } = req.body;
-    
-    // Check if food item exists
-    const existingFoodItem = await FoodItem.findById(req.params.id);
-    if (!existingFoodItem) {
-      return res.status(404).json({
-        success: false,
-        message: 'Food item not found'
-      });
-    }
-
-    // Check if category exists (if provided)
-    if (category_id) {
-      const category = await Category.findById(category_id);
-      if (!category) {
-        return res.status(400).json({
-          success: false,
-          message: 'Category not found'
-        });
-      }
-    }
-
-    const updateData = {};
-    if (name !== undefined) updateData.name = name;
-    if (description !== undefined) updateData.description = description;
-    if (price !== undefined) updateData.price = parseFloat(price);
-    if (category_id !== undefined) updateData.category_id = parseInt(category_id);
-    if (is_available !== undefined) updateData.is_available = is_available;
+    const updateData = req.body;
     if (req.file) updateData.image_url = `/uploads/${req.file.filename}`;
 
     const foodItem = await FoodItem.update(req.params.id, updateData);
 
     res.json({
       success: true,
-      message: 'Food item updated successfully',
       data: { food_item: foodItem }
     });
+
   } catch (error) {
     console.error('Update food item error:', error.message);
     res.status(500).json({
@@ -263,24 +259,18 @@ router.put('/:id', [
   }
 });
 
-// Delete food item (admin only)
+
+
+// DELETE FOOD ITEM
 router.delete('/:id', [authenticateToken, requireAdmin], async (req, res) => {
   try {
-    // Check if food item exists
-    const foodItem = await FoodItem.findById(req.params.id);
-    if (!foodItem) {
-      return res.status(404).json({
-        success: false,
-        message: 'Food item not found'
-      });
-    }
-
     await FoodItem.delete(req.params.id);
 
     res.json({
       success: true,
       message: 'Food item deleted successfully'
     });
+
   } catch (error) {
     console.error('Delete food item error:', error.message);
     res.status(500).json({
@@ -290,65 +280,23 @@ router.delete('/:id', [authenticateToken, requireAdmin], async (req, res) => {
   }
 });
 
-// Toggle food item availability (admin only)
+
+
+// TOGGLE AVAILABILITY
 router.patch('/:id/toggle-availability', [authenticateToken, requireAdmin], async (req, res) => {
   try {
     const foodItem = await FoodItem.toggleAvailability(req.params.id);
-    
-    if (!foodItem) {
-      return res.status(404).json({
-        success: false,
-        message: 'Food item not found'
-      });
-    }
 
     res.json({
       success: true,
-      message: `Food item ${foodItem.is_available ? 'enabled' : 'disabled'} successfully`,
       data: { food_item: foodItem }
     });
+
   } catch (error) {
     console.error('Toggle availability error:', error.message);
     res.status(500).json({
       success: false,
       message: 'Server error while toggling food item availability'
-    });
-  }
-});
-
-// Get popular food items (public route)
-router.get('/popular/list', optionalAuth, async (req, res) => {
-  try {
-    const { limit = 10 } = req.query;
-    const popularItems = await FoodItem.getPopular(parseInt(limit));
-
-    res.json({
-      success: true,
-      data: { popular_items: popularItems }
-    });
-  } catch (error) {
-    console.error('Get popular items error:', error.message);
-    res.status(500).json({
-      success: false,
-      message: 'Server error while fetching popular items'
-    });
-  }
-});
-
-// Get food items by category (public route)
-router.get('/category/:categoryId', optionalAuth, async (req, res) => {
-  try {
-    const foodItems = await FoodItem.getByCategory(req.params.categoryId);
-
-    res.json({
-      success: true,
-      data: { food_items: foodItems }
-    });
-  } catch (error) {
-    console.error('Get food items by category error:', error.message);
-    res.status(500).json({
-      success: false,
-      message: 'Server error while fetching food items by category'
     });
   }
 });
