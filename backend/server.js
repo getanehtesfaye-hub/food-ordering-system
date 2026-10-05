@@ -1,3 +1,4 @@
+
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
@@ -5,23 +6,37 @@ require('dotenv').config();
 
 const app = express();
 
+// CORS
 app.use(cors({
-  origin: function(origin, callback) {
+  origin: function (origin, callback) {
     if (!origin) return callback(null, true);
-    if (origin.includes('localhost')) return callback(null, true);
-    if (origin.includes('vercel.app')) return callback(null, true);
+
+    if (origin.includes('localhost')) {
+      return callback(null, true);
+    }
+
+    if (origin.includes('vercel.app')) {
+      return callback(null, true);
+    }
+
     callback(new Error('Not allowed by CORS'));
   },
   credentials: true
 }));
 
+// Body parsers
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Static uploads
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Health check
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'OK', message: 'Food Ordering API is running' });
+  res.json({
+    status: 'OK',
+    message: 'Food Ordering API is running'
+  });
 });
 
 // Routes
@@ -40,22 +55,34 @@ app.use('/api/users', userRoutes);
 // Error handler
 app.use((err, req, res, next) => {
   console.error(err.stack);
-  res.status(500).json({ success: false, message: 'Something went wrong!' });
+
+  res.status(500).json({
+    success: false,
+    message: 'Something went wrong!'
+  });
 });
 
 // 404 handler
-app.use('*', (req, res) => {
-  res.status(404).json({ success: false, message: 'Route not found' });
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    message: 'Route not found'
+  });
 });
 
 // Local development only
 if (process.env.NODE_ENV !== 'production') {
   const { testConnection } = require('./src/config/database');
+
   testConnection();
+
   const PORT = process.env.PORT || 5000;
+
   app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
   });
 }
 
+// Export app for Vercel
 module.exports = app;
+
