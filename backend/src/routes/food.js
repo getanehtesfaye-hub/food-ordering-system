@@ -126,7 +126,8 @@ router.get('/popular/list', optionalAuth, async (req, res) => {
     console.error('Get popular items error:', error.message);
     res.status(500).json({
       success: false,
-      message: 'Server error while fetching popular items'
+      message: 'Server error while fetching popular items',
+      debug: error.message // TEMPORARY: remove after fixing the database connection
     });
   }
 });
